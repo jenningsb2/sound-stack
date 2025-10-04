@@ -15,7 +15,7 @@
   "commands": [
     {
       "name": "priority-list",
-      "title": "Manage Audio Device Priority",
+      "title": "List Devices",
       "subtitle": "Sound Stack",
       "description": "View and reorder your audio input and output devices by priority.",
       "mode": "view"

@@ -30,8 +30,8 @@ Set up your preferred order for audio input and output devices. Sound Stack reme
 
 ## Commands
 
-### Manage Audio Device Priority
-Open your priority list to view and reorder all audio devices. Use keyboard shortcuts to quickly adjust priorities:
+### List Devices
+View and reorder all your audio devices by priority. Use keyboard shortcuts to quickly adjust priorities:
 - **Cmd+T** - Set as top priority
 - **Cmd+Opt+↑/↓** - Move up/down in priority
 - **Cmd+B** - Move to bottom
@@ -63,7 +63,7 @@ How often to check for audio device changes in the background. Lower values are 
 
 ## How It Works
 
-1. **Set Your Priorities**: Open "Manage Audio Device Priority" and arrange devices in your preferred order
+1. **Set Your Priorities**: Open "List Devices" and arrange devices in your preferred order
 2. **Choose Your Mode**:
    - Manual: Use "Switch to Priority Devices" command when needed
    - Automatic: Enable the preference and let the background monitor handle it
