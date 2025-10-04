@@ -10,6 +10,7 @@ import {
   setDefaultOutputDevice,
   setDefaultInputDevice,
   setDefaultSystemDevice,
+  AudioDevice,
 } from "./audio-device";
 import {
   getOutputPriorityList,
@@ -70,10 +71,7 @@ export default function ListDevices() {
     }));
 
     // Save current device info for future reference
-    await Promise.all([
-      saveDeviceInfo(outputDevicesWithTransport, true),
-      saveDeviceInfo(inputDevicesWithTransport, false),
-    ]);
+    await Promise.all([saveDeviceInfo(outputDevices, true), saveDeviceInfo(inputDevices, false)]);
 
     // Auto-initialize priority lists if empty - rank all available devices with current active device as #1
     if (outputPriorityList.length === 0 && outputDevicesWithTransport.length > 0) {
@@ -475,11 +473,6 @@ export default function ListDevices() {
   );
 
   const getDeviceIcon = (device: Device): Icon => {
-    // Check for AirPlay devices first
-    if (device.transportType === "Airplay") {
-      return Icon.AirplayVideo;
-    }
-
     // Check if it's a Bluetooth device
     if (device.transportType === "Bluetooth" || device.transportType === "BluetoothLowEnergy") {
       const name = device.name.toLowerCase();
@@ -492,7 +485,7 @@ export default function ListDevices() {
       return Icon.Bluetooth;
     }
 
-    // Default icons based on device type
+    // Default icons based on device type (includes AirPlay, USB, HDMI, etc.)
     return device.isInput ? Icon.Microphone : Icon.Speaker;
   };
 
