@@ -184,18 +184,8 @@ export default function ListDevices() {
       await setInputPriorityList(updatedInputPriorityList);
     }
 
-    const processedOutputDevices = createFullDeviceList(
-      outputDevices,
-      outputPriorityList,
-      true,
-      currentOutputDevice,
-    );
-    const processedInputDevices = createFullDeviceList(
-      inputDevices,
-      inputPriorityList,
-      false,
-      currentInputDevice,
-    );
+    const processedOutputDevices = createFullDeviceList(outputDevices, outputPriorityList, true, currentOutputDevice);
+    const processedInputDevices = createFullDeviceList(inputDevices, inputPriorityList, false, currentInputDevice);
 
     // Sort devices by priority rank (lower rank = higher priority)
     processedOutputDevices.sort((a, b) => a.priorityRank - b.priorityRank);
