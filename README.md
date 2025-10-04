@@ -28,13 +28,6 @@ Set up your preferred order for audio input and output devices. Sound Stack reme
 - Automatically switches when devices connect or disconnect
 - Get notified when switches happen
 
-### ✨ Smart Features
-- **Priority List**: Drag and drop to reorder your devices
-- **Device Tracking**: Shows disconnected devices you've previously used
-- **System Sounds**: Optionally switch where system alerts and notification beeps play
-- **Visual Indicators**: See which devices are currently active and available
-- **Device Recognition**: Identifies AirPods, Bluetooth devices, and more with appropriate icons
-
 ## Commands
 
 ### Manage Audio Device Priority
@@ -67,20 +60,6 @@ How often to check for audio device changes in the background. Lower values are 
 - 60 seconds (Balanced) ← Default
 - 2 minutes (Conservative)
 - 5 minutes (Minimal Impact)
-
-## Use Cases
-
-### For Remote Workers
-Set your meeting headset as top priority. When you plug it in for a call, Sound Stack automatically switches to it.
-
-### For Music Producers
-Prioritize your studio monitors over built-in speakers. Switch seamlessly between devices without opening System Settings.
-
-### For Commuters
-Put your AirPods as #1 priority. They'll automatically become active when you connect them, and switch back to speakers when they disconnect.
-
-### For Multi-Device Users
-Manage multiple Bluetooth headphones, USB microphones, and audio interfaces with ease.
 
 ## How It Works
 
