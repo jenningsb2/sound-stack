@@ -185,13 +185,13 @@ export default function ListDevices() {
     }
 
     const processedOutputDevices = createFullDeviceList(
-      outputDevicesWithTransport,
+      outputDevices,
       outputPriorityList,
       true,
       currentOutputDevice,
     );
     const processedInputDevices = createFullDeviceList(
-      inputDevicesWithTransport,
+      inputDevices,
       inputPriorityList,
       false,
       currentInputDevice,
