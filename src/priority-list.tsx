@@ -19,15 +19,12 @@ import {
   setInputPriorityList,
   getDeviceInfo,
   saveDeviceInfo,
+  mergeDeviceInfo,
+  DeviceType,
 } from "./priority-utils";
 
-type Device = {
-  id: string;
-  uid: string;
-  name: string;
-  transportType: string;
-  isInput: boolean;
-  isOutput: boolean;
+// AudioDevice extended with UI state for priority list display
+type DeviceWithPriority = AudioDevice & {
   priorityRank: number;
   isAvailable: boolean;
   isCurrent: boolean;
@@ -57,90 +54,35 @@ export default function ListDevices() {
     let [outputPriorityList, inputPriorityList] = await Promise.all([getOutputPriorityList(), getInputPriorityList()]);
 
     // Get stored device info for transport types of disconnected devices
-    const [outputDeviceInfo, inputDeviceInfo] = await Promise.all([getDeviceInfo(true), getDeviceInfo(false)]);
+    const [outputDeviceInfo, inputDeviceInfo] = await Promise.all([
+      getDeviceInfo(DeviceType.Output),
+      getDeviceInfo(DeviceType.Input),
+    ]);
 
-    // Save device info for currently available devices, merging with existing stored info
-    // This ensures we keep info for disconnected devices while updating info for connected ones
-    const updatedOutputDeviceInfo = [...outputDeviceInfo];
-    const updatedInputDeviceInfo = [...inputDeviceInfo];
-
-    // Update or add info for currently available devices
-    outputDevices.forEach((device) => {
-      const existingIndex = updatedOutputDeviceInfo.findIndex((info) => info.name === device.name);
-      const deviceInfo = { name: device.name, transportType: device.transportType };
-      if (existingIndex >= 0) {
-        updatedOutputDeviceInfo[existingIndex] = deviceInfo;
-      } else {
-        updatedOutputDeviceInfo.push(deviceInfo);
-      }
-    });
-
-    inputDevices.forEach((device) => {
-      const existingIndex = updatedInputDeviceInfo.findIndex((info) => info.name === device.name);
-      const deviceInfo = { name: device.name, transportType: device.transportType };
-      if (existingIndex >= 0) {
-        updatedInputDeviceInfo[existingIndex] = deviceInfo;
-      } else {
-        updatedInputDeviceInfo.push(deviceInfo);
-      }
-    });
-
-    // Save the merged device info
+    // Merge and save device info
     await Promise.all([
-      saveDeviceInfo(
-        updatedOutputDeviceInfo.map((info) => ({
-          name: info.name,
-          transportType: info.transportType as TransportType,
-          id: "",
-          uid: "",
-          isInput: false,
-          isOutput: true,
-        })),
-        true,
-      ),
-      saveDeviceInfo(
-        updatedInputDeviceInfo.map((info) => ({
-          name: info.name,
-          transportType: info.transportType as TransportType,
-          id: "",
-          uid: "",
-          isInput: true,
-          isOutput: false,
-        })),
-        false,
-      ),
+      saveDeviceInfo(mergeDeviceInfo(outputDeviceInfo, outputDevices), DeviceType.Output),
+      saveDeviceInfo(mergeDeviceInfo(inputDeviceInfo, inputDevices), DeviceType.Input),
     ]);
 
     // Auto-initialize priority lists if empty - rank all available devices with current active device as #1
     if (outputPriorityList.length === 0 && outputDevices.length > 0) {
-      // Start with current active device, then add others
-      const prioritizedDevices: string[] = [];
-      if (currentOutputDevice) {
-        prioritizedDevices.push(currentOutputDevice.name);
-      }
-      // Add remaining devices that aren't the current one
-      outputDevices.forEach((device) => {
-        if (!prioritizedDevices.includes(device.name)) {
-          prioritizedDevices.push(device.name);
-        }
-      });
-      outputPriorityList = prioritizedDevices;
+      outputPriorityList = currentOutputDevice
+        ? [
+            currentOutputDevice.name,
+            ...outputDevices.filter((d) => d.name !== currentOutputDevice.name).map((d) => d.name),
+          ]
+        : outputDevices.map((d) => d.name);
       await setOutputPriorityList(outputPriorityList);
     }
 
     if (inputPriorityList.length === 0 && inputDevices.length > 0) {
-      // Start with current active device, then add others
-      const prioritizedDevices: string[] = [];
-      if (currentInputDevice) {
-        prioritizedDevices.push(currentInputDevice.name);
-      }
-      // Add remaining devices that aren't the current one
-      inputDevices.forEach((device) => {
-        if (!prioritizedDevices.includes(device.name)) {
-          prioritizedDevices.push(device.name);
-        }
-      });
-      inputPriorityList = prioritizedDevices;
+      inputPriorityList = currentInputDevice
+        ? [
+            currentInputDevice.name,
+            ...inputDevices.filter((d) => d.name !== currentInputDevice.name).map((d) => d.name),
+          ]
+        : inputDevices.map((d) => d.name);
       await setInputPriorityList(inputPriorityList);
     }
 
@@ -148,11 +90,11 @@ export default function ListDevices() {
     const createFullDeviceList = (
       availableDevices: AudioDevice[],
       priorityList: string[],
-      isOutput: boolean,
+      deviceType: DeviceType,
       currentDevice: AudioDevice,
-    ) => {
-      const devices: Device[] = [];
-      const storedDeviceInfo = isOutput ? outputDeviceInfo : inputDeviceInfo;
+    ): DeviceWithPriority[] => {
+      const devices: DeviceWithPriority[] = [];
+      const storedDeviceInfo = deviceType === DeviceType.Output ? outputDeviceInfo : inputDeviceInfo;
 
       // Add all devices from priority list (available or not)
       priorityList.forEach((deviceName, index) => {
@@ -173,9 +115,9 @@ export default function ListDevices() {
             id: "",
             uid: `unavailable-${deviceName}`,
             name: deviceName,
-            transportType: storedInfo?.transportType || "Unknown",
-            isInput: !isOutput,
-            isOutput: isOutput,
+            transportType: (storedInfo?.transportType as TransportType) || TransportType.Unknown,
+            isInput: deviceType === DeviceType.Input,
+            isOutput: deviceType === DeviceType.Output,
             priorityRank: index + 1,
             isAvailable: false,
             isCurrent: false,
@@ -206,24 +148,31 @@ export default function ListDevices() {
     const newOutputDevices = outputDevices.filter(
       (device) => !outputPriorityList.some((name) => name.toLowerCase() === device.name.toLowerCase()),
     );
+    if (newOutputDevices.length > 0) {
+      outputPriorityList = [...outputPriorityList, ...newOutputDevices.map((d) => d.name)];
+      await setOutputPriorityList(outputPriorityList);
+    }
+
     const newInputDevices = inputDevices.filter(
       (device) => !inputPriorityList.some((name) => name.toLowerCase() === device.name.toLowerCase()),
     );
-
-    if (newOutputDevices.length > 0) {
-      const updatedOutputPriorityList = [...outputPriorityList, ...newOutputDevices.map((d) => d.name)];
-      outputPriorityList = updatedOutputPriorityList;
-      await setOutputPriorityList(updatedOutputPriorityList);
-    }
-
     if (newInputDevices.length > 0) {
-      const updatedInputPriorityList = [...inputPriorityList, ...newInputDevices.map((d) => d.name)];
-      inputPriorityList = updatedInputPriorityList;
-      await setInputPriorityList(updatedInputPriorityList);
+      inputPriorityList = [...inputPriorityList, ...newInputDevices.map((d) => d.name)];
+      await setInputPriorityList(inputPriorityList);
     }
 
-    const processedOutputDevices = createFullDeviceList(outputDevices, outputPriorityList, true, currentOutputDevice);
-    const processedInputDevices = createFullDeviceList(inputDevices, inputPriorityList, false, currentInputDevice);
+    const processedOutputDevices = createFullDeviceList(
+      outputDevices,
+      outputPriorityList,
+      DeviceType.Output,
+      currentOutputDevice,
+    );
+    const processedInputDevices = createFullDeviceList(
+      inputDevices,
+      inputPriorityList,
+      DeviceType.Input,
+      currentInputDevice,
+    );
 
     // Sort devices by priority rank (lower rank = higher priority)
     processedOutputDevices.sort((a, b) => a.priorityRank - b.priorityRank);
@@ -247,25 +196,32 @@ export default function ListDevices() {
     }
   }, [deviceData]);
 
-  // Create processed device data using local priority lists
+  // Re-rank devices based on local priority changes
   const processedDeviceData = deviceData
-    ? (() => {
-        const createDeviceListWithLocalPriorities = (devices: Device[], priorityList: string[]) => {
-          return devices
-            .map((device) => ({
+    ? {
+        outputDevices: deviceData.outputDevices
+          .map((device) => {
+            const priorityIndex = localOutputPriorityList.findIndex(
+              (name) => name.toLowerCase() === device.name.toLowerCase(),
+            );
+            return {
               ...device,
-              priorityRank:
-                priorityList.findIndex((name) => name.toLowerCase() === device.name.toLowerCase()) + 1 ||
-                priorityList.length + 1,
-            }))
-            .sort((a, b) => a.priorityRank - b.priorityRank);
-        };
-
-        return {
-          outputDevices: createDeviceListWithLocalPriorities(deviceData.outputDevices, localOutputPriorityList),
-          inputDevices: createDeviceListWithLocalPriorities(deviceData.inputDevices, localInputPriorityList),
-        };
-      })()
+              priorityRank: priorityIndex >= 0 ? priorityIndex + 1 : localOutputPriorityList.length + 1,
+            };
+          })
+          .sort((a, b) => a.priorityRank - b.priorityRank),
+        inputDevices: deviceData.inputDevices
+          .map((device) => {
+            const priorityIndex = localInputPriorityList.findIndex(
+              (name) => name.toLowerCase() === device.name.toLowerCase(),
+            );
+            return {
+              ...device,
+              priorityRank: priorityIndex >= 0 ? priorityIndex + 1 : localInputPriorityList.length + 1,
+            };
+          })
+          .sort((a, b) => a.priorityRank - b.priorityRank),
+      }
     : null;
 
   if (isLoading) {
@@ -284,7 +240,7 @@ export default function ListDevices() {
     );
   }
 
-  const autoSwitchIfTopPriority = async (device: Device, newRank = 1, deviceType: "output" | "input") => {
+  const autoSwitchIfTopPriority = async (device: DeviceWithPriority, newRank = 1, deviceType: "output" | "input") => {
     if (preferences.enableAutoSwitch && device.isAvailable && newRank === 1) {
       try {
         if (deviceType === "output" && device.isOutput) {
@@ -303,7 +259,7 @@ export default function ListDevices() {
     }
   };
 
-  const setAsTopPriority = async (device: Device, deviceType: "output" | "input") => {
+  const setAsTopPriority = async (device: DeviceWithPriority, deviceType: "output" | "input") => {
     try {
       const currentList = deviceType === "output" ? localOutputPriorityList : localInputPriorityList;
       const newList = [device.name, ...currentList.filter((name) => name.toLowerCase() !== device.name.toLowerCase())];
@@ -326,7 +282,7 @@ export default function ListDevices() {
     }
   };
 
-  const moveUp = async (device: Device, deviceType: "output" | "input") => {
+  const moveUp = async (device: DeviceWithPriority, deviceType: "output" | "input") => {
     try {
       const currentList = deviceType === "output" ? localOutputPriorityList : localInputPriorityList;
       const currentIndex = currentList.findIndex((name) => name.toLowerCase() === device.name.toLowerCase());
@@ -358,7 +314,7 @@ export default function ListDevices() {
     }
   };
 
-  const moveDown = async (device: Device, deviceType: "output" | "input") => {
+  const moveDown = async (device: DeviceWithPriority, deviceType: "output" | "input") => {
     try {
       const currentList = deviceType === "output" ? localOutputPriorityList : localInputPriorityList;
       const currentIndex = currentList.findIndex((name) => name.toLowerCase() === device.name.toLowerCase());
@@ -384,7 +340,7 @@ export default function ListDevices() {
     }
   };
 
-  const moveToBottom = async (device: Device, deviceType: "output" | "input") => {
+  const moveToBottom = async (device: DeviceWithPriority, deviceType: "output" | "input") => {
     try {
       const currentList = deviceType === "output" ? localOutputPriorityList : localInputPriorityList;
       const newList = [...currentList.filter((name) => name.toLowerCase() !== device.name.toLowerCase()), device.name];
@@ -404,7 +360,7 @@ export default function ListDevices() {
     }
   };
 
-  const renderDeviceActions = (device: Device, deviceType: "output" | "input") => (
+  const renderDeviceActions = (device: DeviceWithPriority, deviceType: "output" | "input") => (
     <ActionPanel>
       <ActionPanel.Section title="Priority Actions">
         <Action
@@ -500,7 +456,7 @@ export default function ListDevices() {
     </ActionPanel>
   );
 
-  const getDeviceIcon = (device: Device): Icon => {
+  const getDeviceIcon = (device: DeviceWithPriority): Icon => {
     // Check if it's a Bluetooth device
     if (device.transportType === TransportType.Bluetooth || device.transportType === TransportType.BluetoothLowEnergy) {
       const name = device.name.toLowerCase();
@@ -517,6 +473,24 @@ export default function ListDevices() {
     return device.isInput ? Icon.Microphone : Icon.Speaker;
   };
 
+  const getDeviceAccessories = (device: DeviceWithPriority): List.Item.Accessory[] => {
+    const accessories: List.Item.Accessory[] = [];
+
+    if (device.isAvailable) {
+      accessories.push({ text: device.id, tooltip: `Device ID: ${device.id}` });
+    } else {
+      accessories.push({ icon: Icon.WifiDisabled, tooltip: "Device disconnected" });
+    }
+
+    if (device.isCurrent) {
+      accessories.push({ icon: Icon.Checkmark, tooltip: "Currently active device" });
+    }
+
+    accessories.push({ text: `#${device.priorityRank}`, tooltip: `Priority rank ${device.priorityRank}` });
+
+    return accessories;
+  };
+
   return (
     <List searchBarPlaceholder="Search audio devices...">
       <List.Section title={`Output Devices (${processedDeviceData.outputDevices.length})`}>
@@ -529,12 +503,7 @@ export default function ListDevices() {
               source: getDeviceIcon(device),
               tintColor: device.isCurrent ? Color.Green : Color.SecondaryText,
             }}
-            accessories={[
-              ...(device.isAvailable ? [{ text: device.id, tooltip: `Device ID: ${device.id}` }] : []),
-              ...(!device.isAvailable ? [{ icon: Icon.WifiDisabled, tooltip: "Device disconnected" }] : []),
-              ...(device.isCurrent ? [{ icon: Icon.Checkmark, tooltip: "Currently active device" }] : []),
-              { text: `#${device.priorityRank}`, tooltip: `Priority rank ${device.priorityRank}` },
-            ]}
+            accessories={getDeviceAccessories(device)}
             actions={renderDeviceActions(device, "output")}
           />
         ))}
@@ -550,12 +519,7 @@ export default function ListDevices() {
               source: getDeviceIcon(device),
               tintColor: device.isCurrent ? Color.Green : Color.SecondaryText,
             }}
-            accessories={[
-              ...(device.isAvailable ? [{ text: device.id, tooltip: `Device ID: ${device.id}` }] : []),
-              ...(!device.isAvailable ? [{ icon: Icon.WifiDisabled, tooltip: "Device disconnected" }] : []),
-              ...(device.isCurrent ? [{ icon: Icon.Checkmark, tooltip: "Currently active device" }] : []),
-              { text: `#${device.priorityRank}`, tooltip: `Priority rank ${device.priorityRank}` },
-            ]}
+            accessories={getDeviceAccessories(device)}
             actions={renderDeviceActions(device, "input")}
           />
         ))}

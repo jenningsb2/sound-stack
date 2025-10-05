@@ -1,6 +1,11 @@
 import { LocalStorage } from "@raycast/api";
 import { AudioDevice } from "./audio-device";
 
+export enum DeviceType {
+  Output = "output",
+  Input = "input",
+}
+
 const OUTPUT_PRIORITY_KEY = "outputPriorityList";
 const INPUT_PRIORITY_KEY = "inputPriorityList";
 const OUTPUT_DEVICE_INFO_KEY = "outputDeviceInfo";
@@ -8,7 +13,7 @@ const INPUT_DEVICE_INFO_KEY = "inputDeviceInfo";
 const OUTPUT_PRIORITY_DIRTY_KEY = "outputPriorityDirty";
 const INPUT_PRIORITY_DIRTY_KEY = "inputPriorityDirty";
 
-type StoredDeviceInfo = {
+export type StoredDeviceInfo = {
   name: string;
   transportType: string;
 };
@@ -41,94 +46,82 @@ export async function getInputPriorityList(): Promise<string[]> {
 
 export async function setOutputPriorityList(priorityList: string[]): Promise<void> {
   await LocalStorage.setItem(OUTPUT_PRIORITY_KEY, JSON.stringify(priorityList));
-  await setPriorityListDirty(true);
+  await setPriorityListDirty(DeviceType.Output);
 }
 
 export async function setInputPriorityList(priorityList: string[]): Promise<void> {
   await LocalStorage.setItem(INPUT_PRIORITY_KEY, JSON.stringify(priorityList));
-  await setPriorityListDirty(false);
+  await setPriorityListDirty(DeviceType.Input);
 }
 
-export async function getDeviceInfo(isOutput: boolean): Promise<StoredDeviceInfo[]> {
+export async function getDeviceInfo(deviceType: DeviceType): Promise<StoredDeviceInfo[]> {
   try {
-    const key = isOutput ? OUTPUT_DEVICE_INFO_KEY : INPUT_DEVICE_INFO_KEY;
+    const key = deviceType === DeviceType.Output ? OUTPUT_DEVICE_INFO_KEY : INPUT_DEVICE_INFO_KEY;
     const stored = await LocalStorage.getItem<string>(key);
     if (!stored) return [];
     const parsed = JSON.parse(stored);
     return Array.isArray(parsed) ? parsed : [];
   } catch (error) {
     console.log("Failed to parse device info, resetting:", error);
-    const key = isOutput ? OUTPUT_DEVICE_INFO_KEY : INPUT_DEVICE_INFO_KEY;
+    const key = deviceType === DeviceType.Output ? OUTPUT_DEVICE_INFO_KEY : INPUT_DEVICE_INFO_KEY;
     await LocalStorage.removeItem(key);
     return [];
   }
 }
 
-export async function saveDeviceInfo(devices: AudioDevice[], isOutput: boolean): Promise<void> {
-  const key = isOutput ? OUTPUT_DEVICE_INFO_KEY : INPUT_DEVICE_INFO_KEY;
-  const deviceInfo: StoredDeviceInfo[] = devices.map((device) => ({
-    name: device.name,
-    transportType: device.transportType,
-  }));
+export async function saveDeviceInfo(deviceInfo: StoredDeviceInfo[], deviceType: DeviceType): Promise<void> {
+  const key = deviceType === DeviceType.Output ? OUTPUT_DEVICE_INFO_KEY : INPUT_DEVICE_INFO_KEY;
   await LocalStorage.setItem(key, JSON.stringify(deviceInfo));
 }
 
-export function assignPriorityRanks(devices: AudioDevice[], priorityList: string[]): AudioDevice[] {
-  return devices.map((device) => {
-    const existingIndex = priorityList.findIndex((name) => name.toLowerCase() === device.name.toLowerCase());
+export function mergeDeviceInfo(existing: StoredDeviceInfo[], current: AudioDevice[]): StoredDeviceInfo[] {
+  const merged = [...existing];
 
-    let priorityRank: number;
+  for (const device of current) {
+    const existingIndex = merged.findIndex((info) => info.name === device.name);
+    const deviceInfo = { name: device.name, transportType: device.transportType };
 
-    if (existingIndex !== -1) {
-      // Device is in existing priority list
-      priorityRank = existingIndex + 1;
+    if (existingIndex >= 0) {
+      merged[existingIndex] = deviceInfo;
     } else {
-      // Device not in priority list - assign to bottom
-      priorityRank = priorityList.length + 1;
-    }
-
-    return {
-      ...device,
-      priorityRank,
-    };
-  });
-}
-
-export async function ensureAllDevicesInPriorityList(devices: AudioDevice[], isOutput: boolean): Promise<string[]> {
-  const currentPriorityList = isOutput ? await getOutputPriorityList() : await getInputPriorityList();
-  const allDeviceNames = devices.map((d) => d.name);
-
-  // Add any missing devices to the end of the priority list
-  const missingDevices = allDeviceNames.filter(
-    (name) => !currentPriorityList.some((priorityName) => priorityName.toLowerCase() === name.toLowerCase()),
-  );
-
-  const updatedPriorityList = [...currentPriorityList, ...missingDevices];
-
-  // Save the updated list if we added any devices
-  if (missingDevices.length > 0) {
-    if (isOutput) {
-      await setOutputPriorityList(updatedPriorityList);
-    } else {
-      await setInputPriorityList(updatedPriorityList);
+      merged.push(deviceInfo);
     }
   }
 
-  return updatedPriorityList;
+  return merged;
 }
 
-export async function isPriorityListDirty(isOutput: boolean): Promise<boolean> {
-  const key = isOutput ? OUTPUT_PRIORITY_DIRTY_KEY : INPUT_PRIORITY_DIRTY_KEY;
+export function getHighestPriorityDevice(devices: AudioDevice[], priorityList: string[]): AudioDevice | null {
+  let highestPriorityDevice: AudioDevice | null = null;
+  let highestPriorityRank = Infinity;
+
+  for (const device of devices) {
+    const priorityIndex = priorityList.findIndex((name) => name.toLowerCase() === device.name.toLowerCase());
+
+    if (priorityIndex !== -1) {
+      const rank = priorityIndex + 1;
+      if (rank < highestPriorityRank) {
+        highestPriorityRank = rank;
+        highestPriorityDevice = device;
+      }
+    }
+  }
+
+  return highestPriorityDevice;
+}
+
+export async function isPriorityListDirty(deviceType: DeviceType): Promise<boolean> {
+  const key = deviceType === DeviceType.Output ? OUTPUT_PRIORITY_DIRTY_KEY : INPUT_PRIORITY_DIRTY_KEY;
   const value = await LocalStorage.getItem<string>(key);
   return value === "true";
 }
 
-export async function setPriorityListDirty(isOutput: boolean): Promise<void> {
-  const key = isOutput ? OUTPUT_PRIORITY_DIRTY_KEY : INPUT_PRIORITY_DIRTY_KEY;
+export async function setPriorityListDirty(deviceType: DeviceType): Promise<void> {
+  const key = deviceType === DeviceType.Output ? OUTPUT_PRIORITY_DIRTY_KEY : INPUT_PRIORITY_DIRTY_KEY;
   await LocalStorage.setItem(key, "true");
 }
 
-export async function clearPriorityListDirty(isOutput: boolean): Promise<void> {
-  const key = isOutput ? OUTPUT_PRIORITY_DIRTY_KEY : INPUT_PRIORITY_DIRTY_KEY;
+export async function clearPriorityListDirty(deviceType: DeviceType): Promise<void> {
+  const key = deviceType === DeviceType.Output ? OUTPUT_PRIORITY_DIRTY_KEY : INPUT_PRIORITY_DIRTY_KEY;
   await LocalStorage.removeItem(key);
 }

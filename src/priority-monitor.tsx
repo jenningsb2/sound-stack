@@ -14,13 +14,14 @@ import {
   setDefaultOutputDevice,
   setDefaultInputDevice,
   setDefaultSystemDevice,
-  AudioDevice,
 } from "./audio-device";
 import {
   getOutputPriorityList,
   getInputPriorityList,
   isPriorityListDirty,
   clearPriorityListDirty,
+  getHighestPriorityDevice,
+  DeviceType,
 } from "./priority-utils";
 
 interface Preferences {
@@ -73,7 +74,10 @@ export default async function PriorityMonitor() {
     // STEP 1: Check dirty flags (minimal memory read)
     console.log(`[PriorityMonitor] STEP 1: Checking dirty flags...`);
     const dirtyCheckStart = Date.now();
-    const [outputDirty, inputDirty] = await Promise.all([isPriorityListDirty(true), isPriorityListDirty(false)]);
+    const [outputDirty, inputDirty] = await Promise.all([
+      isPriorityListDirty(DeviceType.Output),
+      isPriorityListDirty(DeviceType.Input),
+    ]);
     const dirtyCheckDuration = Date.now() - dirtyCheckStart;
     console.log(`[PriorityMonitor] STEP 1: Dirty flags checked in ${dirtyCheckDuration}ms`);
     console.log(`[PriorityMonitor] STEP 1: Output dirty: ${outputDirty}, Input dirty: ${inputDirty}`);
@@ -251,25 +255,6 @@ export default async function PriorityMonitor() {
     console.log(`[PriorityMonitor] STEP 5: Calculating priority rankings...`);
     const priorityCalcStart = Date.now();
 
-    const getHighestPriorityDevice = (devices: AudioDevice[], priorityList: string[]) => {
-      let highestPriorityDevice = null;
-      let highestPriorityRank = Infinity;
-
-      for (const device of devices) {
-        const priorityIndex = priorityList.findIndex((name) => name.toLowerCase() === device.name.toLowerCase());
-
-        if (priorityIndex !== -1) {
-          const rank = priorityIndex + 1;
-          if (rank < highestPriorityRank) {
-            highestPriorityRank = rank;
-            highestPriorityDevice = device;
-          }
-        }
-      }
-
-      return highestPriorityDevice;
-    };
-
     const topOutputDevice = getHighestPriorityDevice(outputDevices, outputPriorityList);
     const topInputDevice = getHighestPriorityDevice(inputDevices, inputPriorityList);
     const priorityCalcDuration = Date.now() - priorityCalcStart;
@@ -358,8 +343,8 @@ export default async function PriorityMonitor() {
 
     await Promise.all([
       LocalStorage.setItem(CACHE_KEY, JSON.stringify(newState)),
-      outputDirty ? clearPriorityListDirty(true) : Promise.resolve(),
-      inputDirty ? clearPriorityListDirty(false) : Promise.resolve(),
+      outputDirty ? clearPriorityListDirty(DeviceType.Output) : Promise.resolve(),
+      inputDirty ? clearPriorityListDirty(DeviceType.Input) : Promise.resolve(),
     ]);
 
     const cacheUpdateDuration = Date.now() - cacheUpdateStart;

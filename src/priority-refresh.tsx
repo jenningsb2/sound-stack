@@ -7,9 +7,8 @@ import {
   setDefaultOutputDevice,
   setDefaultInputDevice,
   setDefaultSystemDevice,
-  AudioDevice,
 } from "./audio-device";
-import { getOutputPriorityList, getInputPriorityList } from "./priority-utils";
+import { getOutputPriorityList, getInputPriorityList, getHighestPriorityDevice } from "./priority-utils";
 
 interface Preferences {
   enableAutoSwitch: boolean;
@@ -71,25 +70,6 @@ export default async function PriorityRefresh() {
 
     // Find highest priority devices
     console.log(`[PriorityRefresh] Calculating priority rankings...`);
-    const getHighestPriorityDevice = (devices: AudioDevice[], priorityList: string[]) => {
-      let highestPriorityDevice = null;
-      let highestPriorityRank = Infinity;
-
-      for (const device of devices) {
-        const priorityIndex = priorityList.findIndex((name) => name.toLowerCase() === device.name.toLowerCase());
-
-        if (priorityIndex !== -1) {
-          const rank = priorityIndex + 1;
-          if (rank < highestPriorityRank) {
-            highestPriorityRank = rank;
-            highestPriorityDevice = device;
-          }
-        }
-      }
-
-      return highestPriorityDevice;
-    };
-
     const topOutputDevice = getHighestPriorityDevice(outputDevices, outputPriorityList);
     const topInputDevice = getHighestPriorityDevice(inputDevices, inputPriorityList);
 
