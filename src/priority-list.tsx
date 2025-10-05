@@ -464,7 +464,7 @@ export default function ListDevices() {
 
   const getDeviceIcon = (device: Device): Icon => {
     // Check if it's a Bluetooth device
-    if (device.transportType === "Bluetooth" || device.transportType === "BluetoothLowEnergy") {
+    if (device.transportType === TransportType.Bluetooth || device.transportType === TransportType.BluetoothLowEnergy) {
       const name = device.name.toLowerCase();
       if (name.includes("airpods")) {
         return Icon.Airpods;
